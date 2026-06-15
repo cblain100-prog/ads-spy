@@ -15,8 +15,6 @@ function seed(): DbShape {
     { name: "Meller", fb: "1415151682063242" },
     { name: "Explicit Poets", fb: "940295872786782" },
     { name: "Aura Eyes", fb: "271725556034437" },
-    { name: "Komono", fb: "176453135730245" },
-    { name: "Hawkers", fb: "482154035180973" },
   ];
   const competitors: Competitor[] = compDefs.map((c, i) => ({
     id: i + 1,
@@ -27,7 +25,7 @@ function seed(): DbShape {
     note: null,
   }));
 
-  const pattern = [0, 1, 0, 2, 0, 3, 1, 0, 4, 2, 0, 1, 3, 0, 2, 4];
+  const pattern = [0, 1, 0, 2, 0, 1, 2, 0, 1, 0, 2, 1, 0, 2, 1];
   const N = 56;
   const ads: Ad[] = [];
   for (let i = 0; i < N; i++) {
@@ -53,9 +51,9 @@ function seed(): DbShape {
       shop_id: 1,
       competitor: comp,
       ad_id: adId,
-      // lien direct vers la crea precise dans l'Ad Library (avec un vrai ad-id : ouvre la video/photo).
-      // en demo les ad-ids sont fictifs -> ces liens precis ne resolvent pas, c'est normal.
-      ad_url: `https://www.facebook.com/ads/library/?id=${adId}`,
+      // demo : lien vers les vraies creas actives du concurrent dans l'Ad Library (durable, jamais casse).
+      // en prod, la routine envoie ad_url = lien direct ?id=<ad_id> vers la crea precise.
+      ad_url: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=FR&media_type=all&view_all_page_id=${compDef.fb}`,
       spend_jour_eur: spendJour,
       spend_estime_eur: cumule,
       prev_spend_jour_eur: prev,
