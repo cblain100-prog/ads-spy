@@ -7,14 +7,20 @@ export interface Profile {
   accel: number | null;
 }
 
-// Curseurs de depart — a calibrer apres ~1 semaine de data reelle.
-const SCALE_ACCEL_MIN = 2; // spend/jour qui double
+// Curseurs SCALE — calques sur le skill marco-moretti (a calibrer apres ~1 semaine).
+// L'acceleration n'a pas le meme sens selon la taille de la pub : doubler depuis
+// une petite base = bruit ; doubler quand on est deja gros = vrai signal.
+const SCALE_FLOOR_JOUR_EUR = 300; // sous 300 €/j : trop petit, jamais SCALE
+const SCALE_PETIT_CUMUL_EUR = 3000; // sous 3000 € cumule : jamais SCALE
+const SCALE_GROS_CUMUL_EUR = 8000; // au-dessus : deja gros -> x2 suffit
+const ACCEL_BANDE_BASSE = 4; // pub moyenne (3k-8k) : doit quadrupler
+const ACCEL_BANDE_HAUTE = 2; // grosse pub (>8k) : x2 suffit
 const NEUVE_MAX_JOURS = 7; // pub "neuve"
 const CONFIRME_MIN_JOURS = 21; // pub "confirmee" (winner prouve)
 
 /**
  * Tag d'une pub a partir de ses donnees brutes.
- * Priorite : SCALE (accelere) > DEPART (neuve) > CONFIRME (longevite).
+ * Priorite : SCALE (accelere, par palier de taille) > DEPART (neuve) > CONFIRME (longevite).
  */
 export function computeProfile(ad: Ad): Profile {
   const accel =
@@ -22,8 +28,16 @@ export function computeProfile(ad: Ad): Profile {
       ? ad.spend_jour_eur / ad.prev_spend_jour_eur
       : null;
 
-  if (accel !== null && accel >= SCALE_ACCEL_MIN) {
-    return { tag: "SCALE", accel };
+  // SCALE seulement si la pub est assez grosse pour que l'acceleration compte.
+  if (
+    accel !== null &&
+    ad.spend_jour_eur >= SCALE_FLOOR_JOUR_EUR &&
+    ad.spend_estime_eur >= SCALE_PETIT_CUMUL_EUR
+  ) {
+    const seuil = ad.spend_estime_eur >= SCALE_GROS_CUMUL_EUR ? ACCEL_BANDE_HAUTE : ACCEL_BANDE_BASSE;
+    if (accel >= seuil) {
+      return { tag: "SCALE", accel };
+    }
   }
   if (ad.jours_diffusion <= NEUVE_MAX_JOURS) {
     return { tag: "DÉPART", accel };
