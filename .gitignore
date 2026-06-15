@@ -7,3 +7,4 @@ data/db.json
 .DS_Store
 next-env.d.ts
 *.tsbuildinfo
+.vercel
