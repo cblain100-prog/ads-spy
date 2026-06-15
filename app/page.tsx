@@ -61,7 +61,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const fCompetitor = typeof sp.competitor === "string" ? sp.competitor : "";
   const fProfile = typeof sp.profile === "string" ? sp.profile : "";
   const fSuivi = sp.suivi === "1";
-  const fSort: SortKey = sp.sort === "spend" ? "spend" : "scale";
+  const fSort: SortKey = sp.sort === "scale" ? "scale" : "spend";
 
   const all = db.listAds(shopId).map((ad) => ({ ad, profile: computeProfile(ad), scale: scaleScore(ad) }));
 

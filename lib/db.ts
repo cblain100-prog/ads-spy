@@ -53,9 +53,9 @@ function seed(): DbShape {
       shop_id: 1,
       competitor: comp,
       ad_id: adId,
-      // demo : lien vers la vraie page Ad Library du concurrent (les ad-ids de demo sont fictifs).
-      // avec les vraies donnees de la routine, ad_url pointera sur la crea precise.
-      ad_url: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=FR&view_all_page_id=${compDef.fb}`,
+      // lien direct vers la crea precise dans l'Ad Library (avec un vrai ad-id : ouvre la video/photo).
+      // en demo les ad-ids sont fictifs -> ces liens precis ne resolvent pas, c'est normal.
+      ad_url: `https://www.facebook.com/ads/library/?id=${adId}`,
       spend_jour_eur: spendJour,
       spend_estime_eur: cumule,
       prev_spend_jour_eur: prev,
