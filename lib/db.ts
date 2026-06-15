@@ -5,59 +5,93 @@ import type { Ad, Competitor, DbShape, Shop } from "./types";
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
 
-/** Donnees de demonstration (matche le mockup valide avec Colin). */
+/**
+ * Donnees de demonstration (boutique Marco Moretti, ~56 pubs) pour que le top 50
+ * soit peuple direct. Genere de facon deterministe : meme rendu a chaque reseed.
+ */
 function seed(): DbShape {
-  const now = "2026-06-15T08:12:00.000Z";
-  const shops: Shop[] = [{ id: 1, name: "Marco Moretti", created_at: now }];
-  const competitors: Competitor[] = [
-    { id: 1, shop_id: 1, name: "Meller", facebook_page_id: "1415151682063242", active: true },
-    { id: 2, shop_id: 1, name: "Explicit Poets", facebook_page_id: "940295872786782", active: true },
-    { id: 3, shop_id: 1, name: "Aura Eyes", facebook_page_id: "271725556034437", active: true },
+  const base = "2026-06-15T08:12:00.000Z";
+  const compDefs = [
+    { name: "Meller", fb: "1415151682063242" },
+    { name: "Explicit Poets", fb: "940295872786782" },
+    { name: "Aura Eyes", fb: "271725556034437" },
+    { name: "Komono", fb: "176453135730245" },
+    { name: "Hawkers", fb: "482154035180973" },
   ];
-  // competitor, ad_id, spend_jour, cumule, prev_spend_jour, jours, reach
-  const raw: Array<[string, string, number, number, number | null, number, number, boolean]> = [
-    ["Meller", "120218400111", 2100, 84000, 2000, 41, 9333333, true],
-    ["Aura Eyes", "120218400222", 1850, 13000, null, 7, 1444444, false],
-    ["Meller", "120218400333", 1600, 35000, 1500, 22, 3888888, false],
-    ["Explicit Poets", "120218400444", 1320, 9200, 550, 14, 1022222, true],
-    ["Meller", "120218400555", 1180, 5900, null, 5, 655555, false],
-    ["Aura Eyes", "120218400666", 980, 41000, 950, 52, 4555555, false],
-    ["Explicit Poets", "120218400777", 870, 6100, 414, 9, 677777, false],
-    ["Meller", "120218400888", 760, 28500, 740, 38, 3166666, false],
-    ["Aura Eyes", "120218400999", 640, 3800, null, 6, 422222, false],
-    ["Explicit Poets", "120218401010", 590, 19700, 580, 34, 2188888, false],
-  ];
-  const ads: Ad[] = raw.map((r, i) => ({
+  const competitors: Competitor[] = compDefs.map((c, i) => ({
     id: i + 1,
     shop_id: 1,
-    competitor: r[0],
-    ad_id: r[1],
-    ad_url: `https://www.facebook.com/ads/library/?id=${r[1]}`,
-    spend_jour_eur: r[2],
-    spend_estime_eur: r[3],
-    prev_spend_jour_eur: r[4],
-    jours_diffusion: r[5],
-    reach: r[6],
-    suivi: r[7],
-    first_seen: null,
-    updated_at: now,
+    name: c.name,
+    facebook_page_id: c.fb,
+    active: true,
+    note: null,
   }));
-  return { shops, competitors, ads, meta: { lastSeq: 100, updatedAt: now } };
+
+  const pattern = [0, 1, 0, 2, 0, 3, 1, 0, 4, 2, 0, 1, 3, 0, 2, 4];
+  const N = 56;
+  const ads: Ad[] = [];
+  for (let i = 0; i < N; i++) {
+    const spendJour = Math.max(60, Math.round(3000 * Math.pow(0.94, i)));
+    const comp = compDefs[pattern[i % pattern.length]].name;
+    const r = i % 7;
+    const days = r === 0 ? 4 : r === 1 ? 6 : r === 2 ? 12 : 24 + ((i * 11) % 66);
+    let prev: number | null = null;
+    if (i % 4 === 2) prev = Math.round(spendJour / (2 + (i % 2))); // SCALE (accel 2-3)
+    else if (i % 3 === 0) prev = Math.round(spendJour * 0.95); // stable, pas scale
+    const cumule = Math.round(spendJour * days * 0.55);
+    const reach = Math.round((cumule / 9) * 1000);
+    const adId = `12021840${1000 + i}`;
+    ads.push({
+      id: i + 1,
+      shop_id: 1,
+      competitor: comp,
+      ad_id: adId,
+      ad_url: `https://www.facebook.com/ads/library/?id=${adId}`,
+      spend_jour_eur: spendJour,
+      spend_estime_eur: cumule,
+      prev_spend_jour_eur: prev,
+      jours_diffusion: days,
+      reach,
+      suivi: i === 0 || i === 3 || i === 9,
+      first_seen: null,
+      updated_at: base,
+    });
+  }
+  return {
+    shops: [{ id: 1, name: "Marco Moretti", created_at: base }],
+    competitors,
+    ads,
+    meta: { lastSeq: 200, updatedAt: base },
+  };
 }
 
+/** Lecture resiliente : marche en local (persiste) ET sur un FS read-only type Vercel (reseed memoire). */
 function read(): DbShape {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) {
-    const s = seed();
-    fs.writeFileSync(DB_PATH, JSON.stringify(s, null, 2), "utf8");
-    return s;
+  try {
+    if (fs.existsSync(DB_PATH)) {
+      return JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DbShape;
+    }
+  } catch {
+    // fichier illisible -> on repart du seed
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DbShape;
+  const s = seed();
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DB_PATH, JSON.stringify(s, null, 2), "utf8");
+  } catch {
+    // FS read-only (ex: Vercel) -> on sert le seed en memoire, pas de persistance
+  }
+  return s;
 }
 
 function write(db: DbShape): void {
   db.meta.updatedAt = new Date().toISOString();
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    // FS read-only -> ecriture ignoree (demo non persistante)
+  }
 }
 
 function nextId(db: DbShape): number {

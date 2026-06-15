@@ -8,12 +8,45 @@ import { eur, kReach } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const LIMIT = 50;
+
 type SP = { [k: string]: string | string[] | undefined };
 
 function majLabel(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function qp(o: { shop: number; competitor?: string; profile?: string; suivi?: boolean }): string {
+  const p = new URLSearchParams();
+  p.set("shop", String(o.shop));
+  if (o.competitor) p.set("competitor", o.competitor);
+  if (o.profile) p.set("profile", o.profile);
+  if (o.suivi) p.set("suivi", "1");
+  return `/?${p.toString()}`;
+}
+
+function Chip({ href, active, label }: { href: string; active: boolean; label: string }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-full px-3 py-1 text-sm font-medium ${
+        active ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-600 hover:bg-slate-100"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center">
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="font-semibold tabular-nums text-slate-800">{value}</div>
+    </div>
+  );
 }
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SP> }) {
@@ -34,7 +67,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   if (fProfile) rows = rows.filter((r) => r.profile.tag === fProfile);
   if (fSuivi) rows = rows.filter((r) => r.ad.suivi);
   rows = [...rows].sort((a, b) => b.ad.spend_jour_eur - a.ad.spend_jour_eur);
-  const top = rows.slice(0, 10);
+  const top = rows.slice(0, LIMIT);
 
   const counts: Record<ProfileTag, number> = { "CONFIRMÉ": 0, "SCALE": 0, "DÉPART": 0, "—": 0 };
   all.forEach((r) => { counts[r.profile.tag] += 1; });
@@ -48,36 +81,43 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <main className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Top 10 — pubs concurrentes</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Top 50 — pubs concurrentes</h1>
             <p className="mt-1 text-sm text-slate-500">
-              {shop?.name ?? "Boutique"} · classees par spend estime/jour (toutes marques)
+              {shop?.name ?? "Boutique"} · classees par spend estime/jour · 50 affichees (la routine scrape tout)
             </p>
           </div>
           <div className="flex gap-3 text-sm">
+            <Kpi label="Pubs" value={String(all.length)} />
             <Kpi label="Suivies" value={String(suiviesCount)} />
-            <Kpi label="Confirmees" value={String(counts["CONFIRMÉ"])} />
             <Kpi label="Scale" value={String(counts["SCALE"])} />
             <Kpi label="MAJ" value={majLabel(db.lastUpdated(shopId))} />
           </div>
         </div>
 
+        {/* Filtre profil en 1 clic */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-400">Profil :</span>
+          <Chip href={qp({ shop: shopId, competitor: fCompetitor, suivi: fSuivi })} active={!fProfile} label="Tous" />
+          {profileOptions.map((p) => (
+            <Chip
+              key={p}
+              href={qp({ shop: shopId, competitor: fCompetitor, profile: p, suivi: fSuivi })}
+              active={fProfile === p}
+              label={p}
+            />
+          ))}
+        </div>
+
+        {/* Filtres concurrent + suivies */}
         <form method="get" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
           <input type="hidden" name="shop" value={shopId} />
+          <input type="hidden" name="profile" value={fProfile} />
           <label className="flex items-center gap-2">
             <span className="text-slate-500">Concurrent</span>
             <select name="competitor" defaultValue={fCompetitor} className="rounded-md border border-slate-300 px-2 py-1">
               <option value="">Tous</option>
               {competitors.map((c) => (
                 <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="text-slate-500">Profil</span>
-            <select name="profile" defaultValue={fProfile} className="rounded-md border border-slate-300 px-2 py-1">
-              <option value="">Tous</option>
-              {profileOptions.map((p) => (
-                <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </label>
@@ -141,7 +181,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               {top.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
-                    Aucune pub. La routine n'a encore rien envoyé pour cette boutique.
+                    Aucune pub pour ce filtre.
                   </td>
                 </tr>
               )}
@@ -155,14 +195,5 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </p>
       </main>
     </>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="font-semibold tabular-nums text-slate-800">{value}</div>
-    </div>
   );
 }
