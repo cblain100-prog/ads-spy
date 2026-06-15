@@ -47,3 +47,13 @@ export function computeProfile(ad: Ad): Profile {
   }
   return { tag: "—", accel };
 }
+
+/**
+ * Score de scale pour le classement : l'acceleration brute, mais seulement si la pub
+ * est assez grosse pour que ca compte (sinon null -> reste en bas du classement).
+ */
+export function scaleScore(ad: Ad): number | null {
+  if (!ad.prev_spend_jour_eur || ad.prev_spend_jour_eur <= 0) return null;
+  if (ad.spend_jour_eur < SCALE_FLOOR_JOUR_EUR || ad.spend_estime_eur < SCALE_PETIT_CUMUL_EUR) return null;
+  return ad.spend_jour_eur / ad.prev_spend_jour_eur;
+}

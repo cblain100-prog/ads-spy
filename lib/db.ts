@@ -32,12 +32,19 @@ function seed(): DbShape {
   const ads: Ad[] = [];
   for (let i = 0; i < N; i++) {
     const spendJour = Math.max(60, Math.round(3000 * Math.pow(0.94, i)));
-    const comp = compDefs[pattern[i % pattern.length]].name;
+    const compDef = compDefs[pattern[i % pattern.length]];
+    const comp = compDef.name;
     const r = i % 7;
     const days = r === 0 ? 4 : r === 1 ? 6 : r === 2 ? 12 : 24 + ((i * 11) % 66);
+    // ~1/3 des pubs scalent, avec une acceleration variee (x10 a x2) pour la demo
+    const accelChoices = [10, 7, 5, 4, 3, 2.5, 2];
     let prev: number | null = null;
-    if (i % 4 === 2) prev = Math.round(spendJour / (2 + (i % 2))); // SCALE (accel 2-3)
-    else if (i % 3 === 0) prev = Math.round(spendJour * 0.95); // stable, pas scale
+    if (i % 3 === 1) {
+      const a = accelChoices[Math.floor(i / 3) % accelChoices.length];
+      prev = Math.max(1, Math.round(spendJour / a));
+    } else if (i % 5 === 0) {
+      prev = Math.round(spendJour * 0.95); // stable, pas scale
+    }
     const cumule = Math.round(spendJour * days * 0.55);
     const reach = Math.round((cumule / 9) * 1000);
     const adId = `12021840${1000 + i}`;
@@ -46,7 +53,9 @@ function seed(): DbShape {
       shop_id: 1,
       competitor: comp,
       ad_id: adId,
-      ad_url: `https://www.facebook.com/ads/library/?id=${adId}`,
+      // demo : lien vers la vraie page Ad Library du concurrent (les ad-ids de demo sont fictifs).
+      // avec les vraies donnees de la routine, ad_url pointera sur la crea precise.
+      ad_url: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=FR&view_all_page_id=${compDef.fb}`,
       spend_jour_eur: spendJour,
       spend_estime_eur: cumule,
       prev_spend_jour_eur: prev,

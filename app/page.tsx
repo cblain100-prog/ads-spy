@@ -3,14 +3,15 @@ import { Nav } from "@/components/Nav";
 import { ProfileBadge } from "@/components/Badge";
 import { toggleSuiviAction } from "./actions";
 import * as db from "@/lib/db";
-import { computeProfile, type ProfileTag } from "@/lib/profile";
-import { eur, kReach } from "@/lib/format";
+import { computeProfile, scaleScore, type ProfileTag } from "@/lib/profile";
+import { eur } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 const LIMIT = 50;
 
 type SP = { [k: string]: string | string[] | undefined };
+type SortKey = "scale" | "spend";
 
 function majLabel(iso: string | null): string {
   if (!iso) return "—";
@@ -18,12 +19,13 @@ function majLabel(iso: string | null): string {
   return d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function qp(o: { shop: number; competitor?: string; profile?: string; suivi?: boolean }): string {
+function qp(o: { shop: number; competitor?: string; profile?: string; suivi?: boolean; sort?: SortKey }): string {
   const p = new URLSearchParams();
   p.set("shop", String(o.shop));
   if (o.competitor) p.set("competitor", o.competitor);
   if (o.profile) p.set("profile", o.profile);
   if (o.suivi) p.set("suivi", "1");
+  if (o.sort) p.set("sort", o.sort);
   return `/?${p.toString()}`;
 }
 
@@ -59,14 +61,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const fCompetitor = typeof sp.competitor === "string" ? sp.competitor : "";
   const fProfile = typeof sp.profile === "string" ? sp.profile : "";
   const fSuivi = sp.suivi === "1";
+  const fSort: SortKey = sp.sort === "spend" ? "spend" : "scale";
 
-  const all = db.listAds(shopId).map((ad) => ({ ad, profile: computeProfile(ad) }));
+  const all = db.listAds(shopId).map((ad) => ({ ad, profile: computeProfile(ad), scale: scaleScore(ad) }));
 
   let rows = all;
   if (fCompetitor) rows = rows.filter((r) => r.ad.competitor === fCompetitor);
   if (fProfile) rows = rows.filter((r) => r.profile.tag === fProfile);
   if (fSuivi) rows = rows.filter((r) => r.ad.suivi);
-  rows = [...rows].sort((a, b) => b.ad.spend_jour_eur - a.ad.spend_jour_eur);
+  rows = [...rows].sort((a, b) => {
+    if (fSort === "scale") {
+      const d = (b.scale ?? -1) - (a.scale ?? -1);
+      if (d !== 0) return d;
+    }
+    return b.ad.spend_jour_eur - a.ad.spend_jour_eur;
+  });
   const top = rows.slice(0, LIMIT);
 
   const counts: Record<ProfileTag, number> = { "CONFIRMÉ": 0, "SCALE": 0, "DÉPART": 0, "—": 0 };
@@ -83,7 +92,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Top 50 — pubs concurrentes</h1>
             <p className="mt-1 text-sm text-slate-500">
-              {shop?.name ?? "Boutique"} · classees par spend estime/jour · 50 affichees (la routine scrape tout)
+              {shop?.name ?? "Boutique"} · {fSort === "scale" ? "classees par scale (×)" : "classees par spend/jour"} · 50 affichees (la routine scrape tout)
             </p>
           </div>
           <div className="flex gap-3 text-sm">
@@ -94,14 +103,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           </div>
         </div>
 
+        {/* Tri */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-400">Trier par :</span>
+          <Chip href={qp({ shop: shopId, competitor: fCompetitor, profile: fProfile, suivi: fSuivi, sort: "scale" })} active={fSort === "scale"} label="Scale (×)" />
+          <Chip href={qp({ shop: shopId, competitor: fCompetitor, profile: fProfile, suivi: fSuivi, sort: "spend" })} active={fSort === "spend"} label="Spend/jour" />
+        </div>
+
         {/* Filtre profil en 1 clic */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-sm text-slate-400">Profil :</span>
-          <Chip href={qp({ shop: shopId, competitor: fCompetitor, suivi: fSuivi })} active={!fProfile} label="Tous" />
+          <Chip href={qp({ shop: shopId, competitor: fCompetitor, suivi: fSuivi, sort: fSort })} active={!fProfile} label="Tous" />
           {profileOptions.map((p) => (
             <Chip
               key={p}
-              href={qp({ shop: shopId, competitor: fCompetitor, profile: p, suivi: fSuivi })}
+              href={qp({ shop: shopId, competitor: fCompetitor, profile: p, suivi: fSuivi, sort: fSort })}
               active={fProfile === p}
               label={p}
             />
@@ -112,6 +128,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <form method="get" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
           <input type="hidden" name="shop" value={shopId} />
           <input type="hidden" name="profile" value={fProfile} />
+          <input type="hidden" name="sort" value={fSort} />
           <label className="flex items-center gap-2">
             <span className="text-slate-500">Concurrent</span>
             <select name="competitor" defaultValue={fCompetitor} className="rounded-md border border-slate-300 px-2 py-1">
@@ -130,14 +147,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           </button>
         </form>
 
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2 font-medium">#</th>
                 <th className="px-3 py-2 font-medium">Concurrent</th>
+                <th className="px-3 py-2 text-right font-medium">Scale</th>
                 <th className="px-3 py-2 text-right font-medium">€/jour</th>
-                <th className="px-3 py-2 text-right font-medium">≈ reach/j</th>
                 <th className="px-3 py-2 text-right font-medium">Cumulé</th>
                 <th className="px-3 py-2 text-right font-medium">Diffusion</th>
                 <th className="px-3 py-2 font-medium">Profil</th>
@@ -150,8 +167,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <tr key={r.ad.ad_id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-400">{i + 1}</td>
                   <td className="px-3 py-2 font-medium text-slate-800">{r.ad.competitor}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{eur(r.ad.spend_jour_eur)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{kReach(r.ad.spend_jour_eur)}</td>
+                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${r.scale && r.scale >= 4 ? "text-amber-600" : "text-slate-700"}`}>
+                    {r.scale != null ? `×${r.scale.toFixed(1)}` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{eur(r.ad.spend_jour_eur)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-500">{eur(r.ad.spend_estime_eur)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-500">{r.ad.jours_diffusion} j</td>
                   <td className="px-3 py-2"><ProfileBadge tag={r.profile.tag} accel={r.profile.accel} /></td>
@@ -190,8 +209,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
 
         <p className="mt-4 text-xs text-slate-400">
-          Spend estimé = proxy (reach × CPM), pas le budget réel du concurrent. CONFIRMÉ = ≥21j et toujours au top ·
-          SCALE = spend/j a ≥ doublé · DÉPART = pub ≤7j déjà au top.
+          Scale = accélération du spend/jour (×N) vs le dernier scan, calculée seulement sur les pubs assez grosses.
+          Spend estimé = proxy (reach × CPM), pas le budget réel. CONFIRMÉ = ≥21j au top · SCALE = accélère franchement · DÉPART = pub ≤7j déjà au top.
         </p>
       </main>
     </>
