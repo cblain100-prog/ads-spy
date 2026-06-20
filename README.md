@@ -35,7 +35,7 @@ Réglages dans `lib/profile.ts`. Le spend est un **proxy** (reach × CPM), pas l
 Toutes les routes exigent l'en-tête `Authorization: Bearer $ADS_SPY_TOKEN` (défini dans `.env.local`).
 
 ```bash
-TOKEN=dev-token-ads-spy
+TOKEN=ton-token   # = la valeur de ADS_SPY_TOKEN dans ton .env.local
 
 # 1. La routine récupère les concurrents actifs à scanner
 curl -s http://localhost:3000/api/shops/1/competitors -H "Authorization: Bearer $TOKEN"
