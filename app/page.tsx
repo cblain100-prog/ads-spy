@@ -3,6 +3,7 @@ import { Nav } from "@/components/Nav";
 import { ProfileBadge } from "@/components/Badge";
 import { toggleSuiviAction } from "./actions";
 import * as db from "@/lib/db";
+import { isConfigured } from "@/lib/db";
 import { computeProfile, scaleScore, type ProfileTag } from "@/lib/profile";
 import { eur } from "@/lib/format";
 
@@ -53,17 +54,22 @@ function Kpi({ label, value }: { label: string; value: string }) {
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const shops = db.listShops();
+  const configured = isConfigured();
+  const shops = await db.listShops();
   const shopId = Number(sp.shop) || (shops[0]?.id ?? 1);
-  const shop = db.getShop(shopId);
-  const competitors = db.listCompetitors(shopId);
+  const [shop, competitors, adsRaw, maj] = await Promise.all([
+    db.getShop(shopId),
+    db.listCompetitors(shopId),
+    db.listAds(shopId),
+    db.lastUpdated(shopId),
+  ]);
 
   const fCompetitor = typeof sp.competitor === "string" ? sp.competitor : "";
   const fProfile = typeof sp.profile === "string" ? sp.profile : "";
   const fSuivi = sp.suivi === "1";
   const fSort: SortKey = sp.sort === "scale" ? "scale" : "spend";
 
-  const all = db.listAds(shopId).map((ad) => ({ ad, profile: computeProfile(ad), scale: scaleScore(ad) }));
+  const all = adsRaw.map((ad) => ({ ad, profile: computeProfile(ad), scale: scaleScore(ad) }));
 
   let rows = all;
   if (fCompetitor) rows = rows.filter((r) => r.ad.competitor === fCompetitor);
@@ -88,6 +94,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <>
       <Nav shopId={shopId} active="dashboard" />
       <main className="mx-auto max-w-6xl px-6 py-8">
+        {!configured && (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            ⚠️ Supabase n&apos;est pas connecté. Dis à Claude Code <span className="font-mono font-medium">setup le projet</span> (ou lance <span className="font-mono font-medium">/setup-supabase</span>) pour créer la base et charger les données.
+          </div>
+        )}
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Top 50 — pubs concurrentes</h1>
@@ -99,7 +110,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             <Kpi label="Pubs" value={String(all.length)} />
             <Kpi label="Suivies" value={String(suiviesCount)} />
             <Kpi label="Scale" value={String(counts["SCALE"])} />
-            <Kpi label="MAJ" value={majLabel(db.lastUpdated(shopId))} />
+            <Kpi label="MAJ" value={majLabel(maj)} />
           </div>
         </div>
 

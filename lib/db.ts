@@ -1,170 +1,109 @@
-import fs from "node:fs";
-import path from "node:path";
-import type { Ad, Competitor, DbShape, Shop } from "./types";
+import type { Ad, Competitor, Shop } from "./types";
+import { sb } from "./supabase";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "db.json");
+export { isConfigured } from "./supabase";
 
 /**
- * Donnees de demonstration (boutique Marco Moretti, ~56 pubs) pour que le top 50
- * soit peuple direct. Genere de facon deterministe : meme rendu a chaque reseed.
+ * Couche d'acces aux donnees, adossee a Supabase (Postgres).
+ * Toutes les fonctions sont async. Si Supabase n'est pas configure (avant le setup),
+ * les lectures renvoient du vide et les ecritures sont des no-op : l'app reste affichable.
  */
-function seed(): DbShape {
-  const base = "2026-06-15T08:12:00.000Z";
-  const compDefs = [
-    { name: "Meller", fb: "1415151682063242" },
-    { name: "Explicit Poets", fb: "940295872786782" },
-    { name: "Aura Eyes", fb: "271725556034437" },
-  ];
-  const competitors: Competitor[] = compDefs.map((c, i) => ({
-    id: i + 1,
-    shop_id: 1,
-    name: c.name,
-    facebook_page_id: c.fb,
-    active: true,
-    note: null,
-  }));
-
-  const pattern = [0, 1, 0, 2, 0, 1, 2, 0, 1, 0, 2, 1, 0, 2, 1];
-  const N = 56;
-  const ads: Ad[] = [];
-  for (let i = 0; i < N; i++) {
-    const spendJour = Math.max(60, Math.round(3000 * Math.pow(0.94, i)));
-    const compDef = compDefs[pattern[i % pattern.length]];
-    const comp = compDef.name;
-    const r = i % 7;
-    const days = r === 0 ? 4 : r === 1 ? 6 : r === 2 ? 12 : 24 + ((i * 11) % 66);
-    // ~1/3 des pubs scalent, avec une acceleration variee (x10 a x2) pour la demo
-    const accelChoices = [10, 7, 5, 4, 3, 2.5, 2];
-    let prev: number | null = null;
-    if (i % 3 === 1) {
-      const a = accelChoices[Math.floor(i / 3) % accelChoices.length];
-      prev = Math.max(1, Math.round(spendJour / a));
-    } else if (i % 5 === 0) {
-      prev = Math.round(spendJour * 0.95); // stable, pas scale
-    }
-    const cumule = Math.round(spendJour * days * 0.55);
-    const reach = Math.round((cumule / 9) * 1000);
-    const adId = `12021840${1000 + i}`;
-    ads.push({
-      id: i + 1,
-      shop_id: 1,
-      competitor: comp,
-      ad_id: adId,
-      // demo : lien vers les vraies creas actives du concurrent dans l'Ad Library (durable, jamais casse).
-      // en prod, la routine envoie ad_url = lien direct ?id=<ad_id> vers la crea precise.
-      ad_url: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=FR&media_type=all&view_all_page_id=${compDef.fb}`,
-      spend_jour_eur: spendJour,
-      spend_estime_eur: cumule,
-      prev_spend_jour_eur: prev,
-      jours_diffusion: days,
-      reach,
-      suivi: i === 0 || i === 3 || i === 9,
-      first_seen: null,
-      updated_at: base,
-    });
-  }
-  return {
-    shops: [{ id: 1, name: "Marco Moretti", created_at: base }],
-    competitors,
-    ads,
-    meta: { lastSeq: 200, updatedAt: base },
-  };
-}
-
-/** Lecture resiliente : marche en local (persiste) ET sur un FS read-only type Vercel (reseed memoire). */
-function read(): DbShape {
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      return JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DbShape;
-    }
-  } catch {
-    // fichier illisible -> on repart du seed
-  }
-  const s = seed();
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(s, null, 2), "utf8");
-  } catch {
-    // FS read-only (ex: Vercel) -> on sert le seed en memoire, pas de persistance
-  }
-  return s;
-}
-
-function write(db: DbShape): void {
-  db.meta.updatedAt = new Date().toISOString();
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
-  } catch {
-    // FS read-only -> ecriture ignoree (demo non persistante)
-  }
-}
-
-function nextId(db: DbShape): number {
-  db.meta.lastSeq += 1;
-  return db.meta.lastSeq;
-}
 
 // ---- shops ----
-export function listShops(): Shop[] {
-  return read().shops;
+export async function listShops(): Promise<Shop[]> {
+  const c = sb();
+  if (!c) return [];
+  const { data } = await c.from("shops").select("*").order("id");
+  return (data ?? []) as Shop[];
 }
-export function getShop(id: number): Shop | undefined {
-  return read().shops.find((s) => s.id === id);
+export async function getShop(id: number): Promise<Shop | undefined> {
+  const c = sb();
+  if (!c) return undefined;
+  const { data } = await c.from("shops").select("*").eq("id", id).maybeSingle();
+  return (data ?? undefined) as Shop | undefined;
 }
-export function addShop(name: string): Shop {
-  const db = read();
-  const shop: Shop = { id: nextId(db), name, created_at: new Date().toISOString() };
-  db.shops.push(shop);
-  write(db);
-  return shop;
+export async function addShop(name: string): Promise<Shop | undefined> {
+  const c = sb();
+  if (!c) return undefined;
+  const { data } = await c.from("shops").insert({ name }).select().single();
+  return data as Shop;
 }
 
 // ---- competitors ----
-export function listCompetitors(shopId: number): Competitor[] {
-  return read().competitors.filter((c) => c.shop_id === shopId);
+export async function listCompetitors(shopId: number): Promise<Competitor[]> {
+  const c = sb();
+  if (!c) return [];
+  const { data } = await c.from("competitors").select("*").eq("shop_id", shopId).order("id");
+  return (data ?? []) as Competitor[];
 }
-export function listActiveCompetitors(shopId: number): Competitor[] {
-  return read().competitors.filter((c) => c.shop_id === shopId && c.active);
+export async function listActiveCompetitors(shopId: number): Promise<Competitor[]> {
+  const c = sb();
+  if (!c) return [];
+  const { data } = await c
+    .from("competitors")
+    .select("*")
+    .eq("shop_id", shopId)
+    .eq("active", true)
+    .order("id");
+  return (data ?? []) as Competitor[];
 }
-export function addCompetitor(shopId: number, name: string, fbPageId: string, note?: string): Competitor {
-  const db = read();
-  const c: Competitor = { id: nextId(db), shop_id: shopId, name, facebook_page_id: fbPageId, active: true, note: note ?? null };
-  db.competitors.push(c);
-  write(db);
-  return c;
+export async function addCompetitor(
+  shopId: number,
+  name: string,
+  fbPageId: string,
+  note?: string,
+): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  await c.from("competitors").insert({
+    shop_id: shopId,
+    name,
+    facebook_page_id: fbPageId,
+    active: true,
+    note: note ?? null,
+  });
 }
-export function setCompetitorActive(id: number, active: boolean): void {
-  const db = read();
-  const c = db.competitors.find((x) => x.id === id);
-  if (c) {
-    c.active = active;
-    write(db);
-  }
+export async function setCompetitorActive(id: number, active: boolean): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  await c.from("competitors").update({ active }).eq("id", id);
 }
-export function deleteCompetitor(id: number): void {
-  const db = read();
-  db.competitors = db.competitors.filter((x) => x.id !== id);
-  write(db);
+export async function deleteCompetitor(id: number): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  await c.from("competitors").delete().eq("id", id);
 }
 
 // ---- ads ----
-export function listAds(shopId: number): Ad[] {
-  return read().ads.filter((a) => a.shop_id === shopId);
+export async function listAds(shopId: number): Promise<Ad[]> {
+  const c = sb();
+  if (!c) return [];
+  const { data } = await c.from("ads").select("*").eq("shop_id", shopId);
+  return (data ?? []) as Ad[];
 }
-export function toggleSuivi(shopId: number, adId: string): void {
-  const db = read();
-  const a = db.ads.find((x) => x.shop_id === shopId && x.ad_id === adId);
-  if (a) {
-    a.suivi = !a.suivi;
-    write(db);
-  }
+export async function toggleSuivi(shopId: number, adId: string): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  const { data } = await c
+    .from("ads")
+    .select("suivi")
+    .eq("shop_id", shopId)
+    .eq("ad_id", adId)
+    .maybeSingle();
+  if (!data) return;
+  await c.from("ads").update({ suivi: !data.suivi }).eq("shop_id", shopId).eq("ad_id", adId);
 }
-export function lastUpdated(shopId: number): string | null {
-  const ads = listAds(shopId);
-  if (ads.length === 0) return null;
-  return ads.reduce((m, a) => (a.updated_at > m ? a.updated_at : m), ads[0].updated_at);
+export async function lastUpdated(shopId: number): Promise<string | null> {
+  const c = sb();
+  if (!c) return null;
+  const { data } = await c
+    .from("ads")
+    .select("updated_at")
+    .eq("shop_id", shopId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.updated_at ?? null;
 }
 
 export interface AdInput {
@@ -179,41 +118,39 @@ export interface AdInput {
 }
 
 /** Upsert d'un lot de pubs sur la cle (shop_id, ad_id). Reporte le spend/jour precedent. */
-export function upsertAds(shopId: number, rows: AdInput[]): number {
-  const db = read();
+export async function upsertAds(shopId: number, rows: AdInput[]): Promise<number> {
+  const c = sb();
+  if (!c || rows.length === 0) return 0;
   const now = new Date().toISOString();
-  let count = 0;
-  for (const row of rows) {
+
+  // On relit l'etat actuel pour reporter prev_spend_jour_eur sur les pubs existantes.
+  const { data: existingRows } = await c
+    .from("ads")
+    .select("ad_id, spend_jour_eur")
+    .eq("shop_id", shopId);
+  const prevByAd = new Map<string, number>(
+    (existingRows ?? []).map((a) => [String(a.ad_id), a.spend_jour_eur as number]),
+  );
+
+  const payload = rows.map((row) => {
     const adId = String(row.ad_id);
-    const existing = db.ads.find((a) => a.shop_id === shopId && a.ad_id === adId);
-    if (existing) {
-      existing.prev_spend_jour_eur = existing.spend_jour_eur;
-      existing.competitor = row.competitor;
-      existing.spend_estime_eur = row.spend_estime_eur;
-      existing.spend_jour_eur = row.spend_jour_eur;
-      existing.jours_diffusion = row.jours_diffusion;
-      if (row.reach != null) existing.reach = row.reach;
-      if (row.ad_url) existing.ad_url = row.ad_url;
-      existing.updated_at = now;
-    } else {
-      db.ads.push({
-        id: nextId(db),
-        shop_id: shopId,
-        competitor: row.competitor,
-        ad_id: adId,
-        ad_url: row.ad_url ?? `https://www.facebook.com/ads/library/?id=${adId}`,
-        spend_estime_eur: row.spend_estime_eur,
-        spend_jour_eur: row.spend_jour_eur,
-        prev_spend_jour_eur: null,
-        jours_diffusion: row.jours_diffusion,
-        reach: row.reach ?? null,
-        suivi: false,
-        first_seen: row.first_seen ?? null,
-        updated_at: now,
-      });
-    }
-    count += 1;
-  }
-  write(db);
-  return count;
+    const known = prevByAd.get(adId);
+    return {
+      shop_id: shopId,
+      competitor: row.competitor,
+      ad_id: adId,
+      ad_url: row.ad_url ?? `https://www.facebook.com/ads/library/?id=${adId}`,
+      spend_estime_eur: row.spend_estime_eur,
+      spend_jour_eur: row.spend_jour_eur,
+      prev_spend_jour_eur: known ?? null,
+      jours_diffusion: row.jours_diffusion,
+      reach: row.reach ?? null,
+      first_seen: row.first_seen ?? null,
+      updated_at: now,
+    };
+  });
+
+  const { error } = await c.from("ads").upsert(payload, { onConflict: "shop_id,ad_id" });
+  if (error) return 0;
+  return payload.length;
 }

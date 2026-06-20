@@ -4,15 +4,21 @@ Dashboard interne qui affiche le **top 10 des pubs concurrentes** (toutes marque
 
 L'app **ne scanne rien** elle-même : une routine Claude (skill `marco-moretti-ads-spy`) lui pousse les données via l'API. L'app stocke et affiche.
 
-## Lancer en local
+## Setup (Supabase)
+
+L'app tourne sur **Supabase** (Postgres). Le plus simple, dans Claude Code :
+
+> dis **setup le projet** (ou tape `/setup-supabase`)
+
+Claude crée le projet Supabase, applique le schéma + le seed (boutique « Marco Moretti » + 3 concurrents + ~56 pubs démo), écrit le `.env.local` et lance l'app. Détails et pré-requis (MCP Supabase) : **[SETUP.md](SETUP.md)**.
+
+Ensuite :
 
 ```bash
-npm install
-npm run dev
-# http://localhost:3000
+npm run dev      # http://localhost:3000
 ```
 
-Au premier lancement, une base de démo est créée dans `data/db.json` (boutique « Marco Moretti » + 3 concurrents + 10 pubs d'exemple). Supprime ce fichier pour repartir de zéro.
+Tant que Supabase n'est pas configuré, l'app affiche une bannière de rappel + un dashboard vide (pas de crash). Schéma : `supabase/schema.sql`.
 
 ## Pages
 

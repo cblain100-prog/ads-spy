@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ shopId: string }> }) {
   if (!checkToken(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { shopId } = await params;
-  return NextResponse.json({ shop_id: Number(shopId), ads: db.listAds(Number(shopId)) });
+  return NextResponse.json({ shop_id: Number(shopId), ads: await db.listAds(Number(shopId)) });
 }
 
 // Upsert d'un lot de pubs envoye par la routine. Body: { ads: AdInput[] }
@@ -23,6 +23,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sho
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
   const rows = Array.isArray(body.ads) ? body.ads : [];
-  const upserted = db.upsertAds(Number(shopId), rows);
+  const upserted = await db.upsertAds(Number(shopId), rows);
   return NextResponse.json({ shop_id: Number(shopId), upserted });
 }

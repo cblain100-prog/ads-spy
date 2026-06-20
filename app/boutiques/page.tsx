@@ -6,8 +6,15 @@ import { addShopAction } from "../actions";
 export const dynamic = "force-dynamic";
 
 export default async function Boutiques() {
-  const shops = db.listShops();
+  const shops = await db.listShops();
   const current = shops[0]?.id ?? 1;
+  const rows = await Promise.all(
+    shops.map(async (s) => ({
+      shop: s,
+      nbCompetitors: (await db.listCompetitors(s.id)).length,
+      nbSuivies: (await db.listAds(s.id)).filter((a) => a.suivi).length,
+    })),
+  );
 
   return (
     <>
@@ -39,11 +46,11 @@ export default async function Boutiques() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {shops.map((s) => (
+              {rows.map(({ shop: s, nbCompetitors, nbSuivies }) => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
-                  <td className="px-3 py-2 text-slate-500">{db.listCompetitors(s.id).length}</td>
-                  <td className="px-3 py-2 text-slate-500">{db.listAds(s.id).filter((a) => a.suivi).length}</td>
+                  <td className="px-3 py-2 text-slate-500">{nbCompetitors}</td>
+                  <td className="px-3 py-2 text-slate-500">{nbSuivies}</td>
                   <td className="px-3 py-2">
                     <Link href={`/?shop=${s.id}`} className="text-sky-600 hover:underline">
                       Voir le dashboard →

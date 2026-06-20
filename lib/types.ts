@@ -28,10 +28,3 @@ export interface Ad {
   first_seen: string | null;
   updated_at: string;
 }
-
-export interface DbShape {
-  shops: Shop[];
-  competitors: Competitor[];
-  ads: Ad[];
-  meta: { lastSeq: number; updatedAt: string };
-}

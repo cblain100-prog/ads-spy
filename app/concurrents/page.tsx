@@ -6,10 +6,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Concurrents({ searchParams }: { searchParams: Promise<{ shop?: string }> }) {
   const sp = await searchParams;
-  const shops = db.listShops();
+  const shops = await db.listShops();
   const shopId = Number(sp.shop) || (shops[0]?.id ?? 1);
-  const shop = db.getShop(shopId);
-  const competitors = db.listCompetitors(shopId);
+  const [shop, competitors] = await Promise.all([db.getShop(shopId), db.listCompetitors(shopId)]);
 
   return (
     <>
