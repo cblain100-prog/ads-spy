@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { ProfileBadge } from "@/components/Badge";
-import { toggleSuiviAction } from "./actions";
+import { toggleSuiviAction, refreshAction } from "./actions";
 import * as db from "@/lib/db";
 import { isConfigured } from "@/lib/db";
 import { computeProfile, scaleScore, type ProfileTag } from "@/lib/profile";
@@ -106,11 +106,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               {shop?.name ?? "Boutique"} · {fSort === "scale" ? "classees par scale (×)" : "classees par spend/jour"} · 50 affichees (la routine scrape tout)
             </p>
           </div>
-          <div className="flex gap-3 text-sm">
+          <div className="flex items-center gap-3 text-sm">
             <Kpi label="Pubs" value={String(all.length)} />
             <Kpi label="Suivies" value={String(suiviesCount)} />
             <Kpi label="Scale" value={String(counts["SCALE"])} />
             <Kpi label="MAJ" value={majLabel(maj)} />
+            <form action={refreshAction}>
+              <input type="hidden" name="shop_id" value={shopId} />
+              <button
+                type="submit"
+                className="rounded-lg bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-500"
+                title="Relance le scan Meta (peut prendre ~30-60 s)"
+              >
+                Actualiser
+              </button>
+            </form>
           </div>
         </div>
 

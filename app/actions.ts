@@ -2,6 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import * as db from "@/lib/db";
+import { runScan } from "@/lib/scan";
+
+// Bouton "Actualiser" du dashboard : relance le scan Meta puis rafraichit la page.
+export async function refreshAction(formData: FormData) {
+  const shopId = Number(formData.get("shop_id"));
+  if (shopId) {
+    await runScan(shopId);
+    revalidatePath("/");
+  }
+}
 
 export async function addCompetitorAction(formData: FormData) {
   const shopId = Number(formData.get("shop_id"));
