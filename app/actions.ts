@@ -13,6 +13,17 @@ export async function refreshAction(formData: FormData) {
   }
 }
 
+// Modifie le seuil de spend (€) depuis le dashboard, puis re-scanne avec le nouveau seuil.
+export async function setFloorAction(formData: FormData) {
+  const shopId = Number(formData.get("shop_id"));
+  const floor = Math.max(0, Math.round(Number(formData.get("floor_eur"))));
+  if (shopId && Number.isFinite(floor)) {
+    await db.setShopFloor(shopId, floor);
+    await runScan(shopId); // applique le nouveau seuil tout de suite (ajoute/retire les pubs)
+    revalidatePath("/");
+  }
+}
+
 export async function addCompetitorAction(formData: FormData) {
   const shopId = Number(formData.get("shop_id"));
   const name = String(formData.get("name") ?? "").trim();

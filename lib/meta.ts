@@ -117,13 +117,17 @@ function daysRunning(start?: string): number {
 // Scan complet d'un concurrent : renvoie les pubs gardees (>= TRACKING_FLOOR_EUR),
 // triees par reach desc. Le spend/jour n'est PAS calcule ici (il depend de l'etat
 // precedent, fait cote route).
-export async function scanCompetitor(name: string, pageId: string): Promise<ScannedAd[]> {
+export async function scanCompetitor(
+  name: string,
+  pageId: string,
+  floorEur: number = TRACKING_FLOOR_EUR,
+): Promise<ScannedAd[]> {
   const raw = await fetchActiveAds(pageId);
   const ads: ScannedAd[] = [];
   for (const ad of raw) {
     const reach = marketReach(ad);
     const spend = estimateSpend(reach);
-    if (spend < TRACKING_FLOOR_EUR) continue;
+    if (spend < floorEur) continue;
     const start = ad.ad_delivery_start_time ?? "";
     ads.push({
       competitor: name,

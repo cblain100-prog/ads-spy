@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { ProfileBadge } from "@/components/Badge";
-import { toggleSuiviAction, refreshAction } from "./actions";
+import { toggleSuiviAction, refreshAction, setFloorAction } from "./actions";
 import * as db from "@/lib/db";
 import { isConfigured } from "@/lib/db";
 import { computeProfile, scaleScore, type ProfileTag } from "@/lib/profile";
@@ -124,11 +124,30 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           </div>
         </div>
 
-        {/* Tri */}
+        {/* Tri + seuil de spend */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-sm text-slate-400">Trier par :</span>
           <Chip href={qp({ shop: shopId, competitor: fCompetitor, profile: fProfile, suivi: fSuivi, sort: "scale" })} active={fSort === "scale"} label="Scale (×)" />
           <Chip href={qp({ shop: shopId, competitor: fCompetitor, profile: fProfile, suivi: fSuivi, sort: "spend" })} active={fSort === "spend"} label="Spend/jour" />
+
+          <form action={setFloorAction} className="ml-auto flex items-center gap-2">
+            <input type="hidden" name="shop_id" value={shopId} />
+            <span className="text-sm text-slate-400">Seuil spend mini</span>
+            <div className="flex items-center rounded-md border border-slate-300 bg-white pl-2">
+              <input
+                type="number"
+                name="floor_eur"
+                min={0}
+                step={500}
+                defaultValue={shop?.floor_eur ?? 2000}
+                className="w-24 py-1 text-right tabular-nums outline-none"
+              />
+              <span className="px-2 text-slate-400">€</span>
+            </div>
+            <button type="submit" className="rounded-md bg-slate-900 px-3 py-1 font-medium text-white hover:bg-slate-700" title="Applique le seuil et re-scanne (~30-60 s)">
+              Appliquer
+            </button>
+          </form>
         </div>
 
         {/* Filtre profil en 1 clic */}

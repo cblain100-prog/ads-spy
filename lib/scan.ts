@@ -24,6 +24,10 @@ export async function runScan(shopId: number): Promise<ScanResult> {
     return { shop_id: shopId, error: "aucun concurrent actif", upserted: 0, summary: [] };
   }
 
+  // Seuil de spend mini (€) reglable par boutique depuis le dashboard ; fallback env/2000.
+  const shop = await db.getShop(shopId);
+  const floorEur = shop?.floor_eur ?? Number(process.env.ADS_SPY_FLOOR_EUR ?? 2000);
+
   // Etat precedent : spend cumule + date du dernier run par ad -> spend/jour incremental.
   const prev = new Map<string, { spend: number; t: number }>();
   for (const a of await db.listAds(shopId)) {
@@ -36,7 +40,7 @@ export async function runScan(shopId: number): Promise<ScanResult> {
 
   for (const comp of competitors) {
     try {
-      const scanned = await scanCompetitor(comp.name, comp.facebook_page_id);
+      const scanned = await scanCompetitor(comp.name, comp.facebook_page_id, floorEur);
       for (const ad of scanned) {
         const p = prev.get(ad.ad_id);
         let spendJour: number;
@@ -68,5 +72,7 @@ export async function runScan(shopId: number): Promise<ScanResult> {
 
   // upsertAds reporte tout seul prev_spend_jour_eur (= spend/jour du run precedent).
   const upserted = await db.upsertAds(shopId, rows);
+  // Le seuil est autoritaire : on vire les pubs passees sous le seuil (ex. apres l'avoir remonte).
+  await db.pruneAdsBelowFloor(shopId, floorEur);
   return { shop_id: shopId, upserted, summary };
 }

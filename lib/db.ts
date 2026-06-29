@@ -28,6 +28,17 @@ export async function addShop(name: string): Promise<Shop | undefined> {
   const { data } = await c.from("shops").insert({ name }).select().single();
   return data as Shop;
 }
+export async function setShopFloor(id: number, floorEur: number): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  await c.from("shops").update({ floor_eur: floorEur }).eq("id", id);
+}
+/** Supprime les pubs sous le seuil (rend le seuil autoritaire quand on le remonte). */
+export async function pruneAdsBelowFloor(shopId: number, floorEur: number): Promise<void> {
+  const c = sb();
+  if (!c) return;
+  await c.from("ads").delete().eq("shop_id", shopId).lt("spend_estime_eur", floorEur);
+}
 
 // ---- competitors ----
 export async function listCompetitors(shopId: number): Promise<Competitor[]> {

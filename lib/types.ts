@@ -2,6 +2,7 @@ export interface Shop {
   id: number;
   name: string;
   created_at: string;
+  floor_eur: number; // seuil de spend estime mini pour suivre une pub (editable depuis le dashboard)
 }
 
 export interface Competitor {
