@@ -30,9 +30,23 @@ Le MCP Supabase doit être connecté (réglages → Connecteurs/MCP). Si absent,
   ```
 - Si le projet est aussi déployé sur Vercel, ajoute ces 3 variables aux env vars Vercel (sinon ignore).
 
-## 5. Lancement
-- Lance `npm run dev` et donne l'URL locale (http://localhost:3000) à l'utilisateur.
-- Confirme : « Setup terminé. La boutique Marco Moretti et ses concurrents sont chargés, le dashboard affiche le top 50. »
+## 5. Déploiement Vercel
+- Lie/déploie le projet sur Vercel (CLI `vercel` authentifiée, ou MCP Vercel) : `vercel --prod --yes`.
+- Ajoute les 3 variables (`SUPABASE_URL`, `SUPABASE_KEY`, `ADS_SPY_TOKEN`) aux env vars Vercel (production).
+- Pour le cron : ajoute aussi `CRON_SECRET` avec **exactement la même valeur que `ADS_SPY_TOKEN`** (Vercel l'envoie en `Authorization: Bearer` au cron, que la route valide).
+
+## 6. Token Meta Ad Library
+- Lance le flux **`/setup-meta`** (token 60 jours). C'est l'étape la plus piégeuse — surtout la **confirmation d'identité obligatoire** sur facebook.com/ID, sinon l'API renvoie `subcode 2332002`. Le détail complet est dans cette commande.
+- Une fois le token posé sur Vercel, redéploie.
+
+## 7. Premier scan + vérif
+- Le cron (`vercel.json`, quotidien 06:00 UTC) est déjà dans le repo : il se registre au déploiement.
+- Lance un premier scan : `curl -X POST <url>/api/shops/1/scan -H "Authorization: Bearer <ADS_SPY_TOKEN>"`. Le résumé doit montrer des pubs gardées par concurrent.
+- Le seed de démo (~56 pubs) est remplacé au fil des scans réels ; tu peux le purger : `delete from ads where shop_id=1 and updated_at = '2026-06-15T08:12:00.000Z';`.
+- Confirme à l'utilisateur : dashboard live, données réelles, scan auto quotidien.
+
+## Lancement local (option)
+- `npm run dev` → http://localhost:3000.
 
 ## Notes
 - Tout l'accès base se fait server-side avec la clé publishable → pas de `NEXT_PUBLIC`, rien d'exposé au navigateur.

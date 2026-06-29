@@ -6,21 +6,19 @@ Le scan est **intégré** : `POST /api/shops/<id>/scan` interroge directement l'
 
 > **Le spend n'est pas réel.** Meta n'expose pas le spend des pubs commerciales (seulement les politiques). On l'estime : `spend ≈ reach × FREQUENCY / 1000 × CPM_EUR` (défauts 2 et 9 €, calibrables via env). Proxy à 2-3× près, et **reach UE seulement** (transparence DSA) → aveugle sur les concurrents qui scalent hors-UE (US/UK). Parfait pour du DTC ciblant la France.
 
-## Setup (Supabase)
+## Recréer une instance (clé en main, dans Claude Code)
 
-L'app tourne sur **Supabase** (Postgres). Le plus simple, dans Claude Code :
+Pour qu'un client ait **sa propre instance** indépendante :
 
-> dis **setup le projet** (ou tape `/setup-supabase`)
+1. Cloner ce repo et l'ouvrir dans **Claude Code** (avec les MCP **Supabase** + **Vercel** connectés, et la CLI `vercel` authentifiée).
+2. Dire **« setup le projet »** (ou taper **`/setup-supabase`**). Claude fait tout, dans l'ordre : `npm install` → projet Supabase + schéma + seed → `.env.local` → déploiement Vercel + env vars → **token Meta** (`/setup-meta`) → cron quotidien → premier scan.
+3. Seule étape vraiment manuelle, côté client : le **token Meta** — il faut **sa propre app Meta** + sa **confirmation d'identité** sur facebook.com/ID (obligatoire pour l'Ad Library API). Tout le flux, avec les pièges, est dans **`/setup-meta`**.
 
-Claude crée le projet Supabase, applique le schéma + le seed (boutique « Marco Moretti » + 3 concurrents + ~56 pubs démo), écrit le `.env.local` et lance l'app. Détails et pré-requis (MCP Supabase) : **[SETUP.md](SETUP.md)**.
-
-Ensuite :
+Le playbook complet pour l'agent est dans **[CLAUDE.md](CLAUDE.md)** (auto-chargé par Claude Code). Tant que Supabase n'est pas configuré, l'app tourne quand même et affiche une bannière de rappel (pas de crash). Schéma : `supabase/schema.sql`.
 
 ```bash
 npm run dev      # http://localhost:3000
 ```
-
-Tant que Supabase n'est pas configuré, l'app affiche une bannière de rappel + un dashboard vide (pas de crash). Schéma : `supabase/schema.sql`.
 
 ## Pages
 
