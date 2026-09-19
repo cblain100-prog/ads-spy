@@ -14,7 +14,7 @@ Pour qu'un client ait **sa propre instance** indépendante :
 2. Dire **« setup le projet »** (ou taper **`/setup-supabase`**). Claude fait tout, dans l'ordre : `npm install` → projet Supabase + schéma + seed → `.env.local` → déploiement Vercel + env vars → **token Meta** (`/setup-meta`) → cron quotidien → premier scan.
 3. Seule étape vraiment manuelle, côté client : le **token Meta** — il faut **sa propre app Meta** + sa **confirmation d'identité** sur facebook.com/ID (obligatoire pour l'Ad Library API). Tout le flux, avec les pièges, est dans **`/setup-meta`**.
 
-Le playbook complet pour l'agent est dans **[CLAUDE.md](CLAUDE.md)** (auto-chargé par Claude Code). Tant que Supabase n'est pas configuré, l'app tourne quand même et affiche une bannière de rappel (pas de crash). Schéma : `supabase/schema.sql`.
+Le playbook complet pour l'agent est dans **[AGENTS.md](AGENTS.md)** (auto-chargé par Claude Code). Tant que Supabase n'est pas configuré, l'app tourne quand même et affiche une bannière de rappel (pas de crash). Schéma : `supabase/schema.sql`.
 
 ```bash
 npm run dev      # http://localhost:3000
